@@ -17,7 +17,7 @@ HELP = """
 
     Usage:
         pdf-grep -h
-        pdf-grep [-q] [-i] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
+        pdf-grep [-q] [-i] [-c] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
     Options and parameters:
         The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern' and
@@ -25,6 +25,9 @@ HELP = """
         -h:          print this help and exit.
         -q:          be quiet in case nothing is found ('No hits (in xx ms)' is reported by default)
         -i:          make the search case insensitive; it is case sensitive by default.
+        -c:          show clean lines, i.e. do not prepend lines with their respective approximate
+                     position in a file; by default each line with a hit is included in results prepended
+                     with approximate position, e.g. "(23%) the actual text of the line"
         -p:          optionally specify explicitly that the next argument is a search pattern,
                      e.g. when you need to search for the reserved word 'not' (see bellow).
         -s {file|-}: don't open the results in 'less', rather save them to the file; fails if the file
@@ -92,6 +95,7 @@ NOT_IN = None
 IC_GREP = ""
 FILE_TO_SAVE = None
 QUIET = False
+CLEAN_LINES = False
 expectNot = False
 expectPat = False
 expectFile = False
@@ -132,7 +136,7 @@ def dirPDFs(directory):
 
 
 def processParams(params):
-    global IC_GREP, QUIET, expectNot, expectPat, expectFile
+    global IC_GREP, QUIET, CLEAN_LINES, expectNot, expectPat, expectFile
     for par in params:
         if expectPat: setSearchPattern(par)
         elif expectNot: setNotMask(par)
@@ -142,6 +146,7 @@ def processParams(params):
         elif par == '-s': expectFile = True
         elif par == '-i': IC_GREP = '-i'
         elif par == '-q': QUIET = True
+        elif par == '-c': CLEAN_LINES = True
         elif par == 'not' and not NOT_IN: expectNot = True
         elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
         elif os.path.isdir(par): FILES_TO_SEARCH.extend(dirPDFs(par))
@@ -222,7 +227,8 @@ def searchInText(lines):
         found = RE_PATTERN.findall(line)
         if found:
             result['hits'] += len(found)
-            result['lines'].append(positionLabel(lines, index) + line)
+            if CLEAN_LINES: result['lines'].append(line)
+            else: result['lines'].append(positionLabel(lines, index) + line)
     return result
 
 
