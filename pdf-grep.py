@@ -8,45 +8,52 @@ import re
 import subprocess
 import sys
 import locale
+import time
 
 HELP = """
     A Python script to search PDF(s) for occurrences of a searched pattern, count them and
-    open the results in the 'less' text viewer. Expects 'pdftotext' and 'less' to be present
-    on your system.
+    open the results in the 'less' text viewer or save them to a file. Expects 'pdftotext'
+    (and optionally other tools such as 'less' or 'cat') to be present on your system.
 
     Usage:
         pdf-grep -h
-        pdf-grep [-i] [file1.pdf] [file2.pdf] [...] [dir1] [dir2] [...] [not exclude-mask] {[-p] pattern}
+        pdf-grep [-q] [-i] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
     Options and parameters:
-        The order of parameters is mostly irrelevant, apart from obvious pairs '{[-p] pattern}' and
-        '[not exclude-mask]'.
-        -h:         prints this help and exits.
-        -i:         makes the search case insensitive; it is case sensitive by default.
-        -p:         optionally specify explicitly that the next argument is a search pattern,
-                    e.g. when you need to search for the reserved word 'not' (see bellow).
+        The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern' and
+        'not exclude-mask'.
+        -h:          print this help and exit.
+        -q:          be quiet in case nothing is found ('No hits (in xx ms)' is reported by default)
+        -i:          make the search case insensitive; it is case sensitive by default.
+        -p:          optionally specify explicitly that the next argument is a search pattern,
+                     e.g. when you need to search for the reserved word 'not' (see bellow).
+        -s {file|-}: don't open the results in 'less', rather save them to the file; fails if the file
+                     is a regular file and already exists; use '-' to just print the results to
+                     the standard output
 
-        fileN.pdf:  file to be searched in, may be repeated.
-        dirN:       directory to be searched in (NOT recursively!), may be repeated; in each
-                    directory all the PDF files (i.e. having the .pdf suffix — suffix is case
-                    insensitive, so the file 'dir/file.PDF' is counted in as well) are included.
-        At least one PDF file or a directory containing one must be given.
+        fileN.pdf:   file to be searched in, may be repeated.
+        dirN:        directory to be searched in (NOT recursively!), may be repeated; in each
+                     directory all the PDF files (i.e. having the .pdf suffix — suffix is case
+                     insensitive, so the file 'dir/file.PDF' is counted in as well) are included.
+        
+        At least one PDF file or a directory containing one must be given!
 
         not exclude-mask:
-                    'not' is a reserved word after which must come exactly one argument 'exclude-mask'
-                    It may appear in this capacity once at most, any other occurrence will be treated
-                    normally, i.e. as directory or search pattern. 'exclude-mask' means beginning of PDF
-                    file names to be excluded from search.
-        pattern:    is a search pattern, must occur exactly once, may contain regexp, may be introduced
-                    with '-p'.
+                     'not' is a reserved word after which must come exactly one argument 'exclude-mask'
+                     It may appear in this capacity once at most, any other occurrence will be treated
+                     normally, i.e. as file, directory or search pattern. The 'exclude-mask' means
+                     beginning of PDF file names to be excluded from search.
+        pattern:     is a search pattern, must occur exactly once, may contain regexp, may be introduced
+                     with '-p'.
 
     Examples:
         pdf-grep "my text" file.pdf
             This will search for 'my text' in the 'file.pdf' file.
 
-        pdf-grep "my text" directory/file*
+        pdf-grep "my text" directory/file* -s -
             This will search for 'my text' in whatever (files and/or directories) the shell returns
-            as the result of expanding the '*' wildcard in the 'directory/file*' expression.
+            as the result of expanding the '*' wildcard in the 'directory/file*' expression. The results
+            will be printed to the standard output.
 
         pdf-grep file.pdf some/directory "reflex[eií]" -i some/other/directory
             This will search for regexp pattern "reflex[eií]" in the file 'file.pdf' (must exist,
@@ -83,14 +90,11 @@ PATTERN = ""
 RE_PATTERN = None
 NOT_IN = None
 IC_GREP = ""
+FILE_TO_SAVE = None
+QUIET = False
 expectNot = False
 expectPat = False
-
-
-def setNotMask(par):
-    global NOT_IN, expectNot
-    NOT_IN = par
-    expectNot = False
+expectFile = False
 
 
 def setSearchPattern(par):
@@ -100,6 +104,21 @@ def setSearchPattern(par):
         expectPat = False
     else:
         errorExit("Cannot search for an empty pattern.")
+
+
+def setNotMask(par):
+    global NOT_IN, expectNot
+    NOT_IN = par
+    expectNot = False
+
+
+def setFile(par):
+    global FILE_TO_SAVE, expectFile
+    if par.strip():
+        FILE_TO_SAVE = par.strip()
+        expectFile = False
+    else:
+        errorExit("File name cannot be empty.")
 
 
 def dirPDFs(directory):
@@ -113,13 +132,16 @@ def dirPDFs(directory):
 
 
 def processParams(params):
-    global IC_GREP, expectNot, expectPat
+    global IC_GREP, QUIET, expectNot, expectPat, expectFile
     for par in params:
         if expectPat: setSearchPattern(par)
         elif expectNot: setNotMask(par)
+        elif expectFile: setFile(par)
         elif par == '-h': printHelp()
         elif par == '-p': expectPat = True
+        elif par == '-s': expectFile = True
         elif par == '-i': IC_GREP = '-i'
+        elif par == '-q': QUIET = True
         elif par == 'not' and not NOT_IN: expectNot = True
         elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
         elif os.path.isdir(par): FILES_TO_SEARCH.extend(dirPDFs(par))
@@ -162,6 +184,30 @@ def checkParams():
     elif IC_GREP: RE_PATTERN = re.compile(utf(PATTERN), re.UNICODE | re.IGNORECASE)
     else: RE_PATTERN = re.compile(utf(PATTERN), re.UNICODE)
     if not FILES_TO_SEARCH: errorExit("Search where?")
+    if FILE_TO_SAVE and FILE_TO_SAVE != '-':
+        if os.path.exists(FILE_TO_SAVE): errorExit("Output file '%s' already exists." % FILE_TO_SAVE)
+
+
+def which(exeFile):
+    def isExe(exeFile):
+        return os.path.isfile(exeFile) and os.access(exeFile, os.X_OK)
+
+    filePath, fileName = os.path.split(exeFile)
+    if filePath:
+        if isExe(exeFile): return exeFile
+    else:
+        for path in os.environ['PATH'].split(os.pathsep):
+            exeFileFull = os.path.join(path, exeFile)
+            if isExe(exeFileFull): return exeFileFull
+    return None
+
+
+def checkPrerequisites():
+    prerequisites = ['pdftotext', ]
+    if not FILE_TO_SAVE: prerequisites.extend(['less', 'cat', ])
+    for item in prerequisites:
+        if not which(item):
+            errorExit("For this script to work '%s' must be installed and available." % item)
 
 
 def positionLabel(lines, index):
@@ -194,26 +240,34 @@ def doSearch():
     return {'total': total, 'lines': lines, 'found': found}
 
 
-def prepareOutput():
-    tempFile = '/dev/shm/.pdf-grep.' + str(os.getpid())
-    if os.path.isfile(tempFile):
-        errorExit("Temporary file '%s' already exists." % tempFile)
-    try: return open(tempFile, 'w'), tempFile
-    except IOError: errorExit("Couldn't create temporary file '%s'." % tempFile)
+def formatDuration(timeDuration):
+    if timeDuration >= 10.0: return '%.1f s' % round(timeDuration, 1)
+    elif timeDuration >= 1.0: return '%.2f s' % round(timeDuration, 2)
+    else: return '%d ms' % (1000 * round(timeDuration, 3))
 
 
-def writeHeader(result, resultFile):
+def openFile4Write(path):
+    if os.path.isfile(path): return False
+    try: return open(path, 'w')
+    except: return False
+
+
+def writeHeader(resultFile, result):
+    resultFile.write('*** Searching for pattern "%s"\n' % PATTERN)
+    if result['lines'] == 1: lineWord = 'line'
+    else: lineWord = 'lines'
     if result['total'] == result['lines']:
-        resultFile.write("*** Total hits: " + str(result['total']) + "\n")
+        resultFile.write("*** Total hits: %d (in %s)\n" % (result['total'], duration))
     else:
-        resultFile.write("*** Total hits: " + str(result['total']) + ' in ' + str(result['lines']) + " lines\n")
+        resultFile.write("*** Total hits: %d in %d %s (in %s)\n" %
+                         (result['total'], result['lines'], lineWord, duration))
 
 
 DELIMITER = "\n*********************************************************************************************\n"
 
 
-def writeFileHeader(result, found):
-    result.write(DELIMITER)
+def writeFileHeader(resultFile, found):
+    resultFile.write(DELIMITER)
     if found['hits'] == 1: hitWord = 'hit'
     else: hitWord = 'hits'
     if len(found['lines']) == 1: lineWord = 'line'
@@ -221,18 +275,44 @@ def writeFileHeader(result, found):
     if found['dir']: dirLbl = ' [%s/]' % found['dir']
     else: dirLbl = ''
     if found['hits'] == len(found['lines']):
-        result.write("*** %s%s: %d %s\n\n" % (found['name'], dirLbl, found['hits'], hitWord))
+        resultFile.write("*** %s%s: %d %s\n\n" % (found['name'], dirLbl, found['hits'], hitWord))
     else:
-        result.write("*** %s%s: %d %s in %d %s\n\n" %
-                     (found['name'], dirLbl, found['hits'], hitWord, len(found['lines']), lineWord))
+        resultFile.write("*** %s%s: %d %s in %d %s\n\n" %
+                         (found['name'], dirLbl, found['hits'], hitWord, len(found['lines']), lineWord))
 
 
-def processResult(result):
-    resultFile, tempFile = prepareOutput()
-    writeHeader(result, resultFile)
-    for found in result['found']:
+def writeResults(resultFile):
+    writeHeader(resultFile, results)
+    for found in results['found']:
         writeFileHeader(resultFile, found)
         resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
+
+
+def saveResult():
+    if FILE_TO_SAVE == '-': writeResults(sys.stdout)
+    else:
+        # check again here
+        if os.path.exists(FILE_TO_SAVE): errorExit("Output file '%s' already exists." % FILE_TO_SAVE)
+        resultFile = openFile4Write(FILE_TO_SAVE)
+        if not resultFile: errorExit("Couldn't create result file '%s'." % FILE_TO_SAVE)
+        writeResults(resultFile)
+        resultFile.close()
+
+
+def prepareOutput():
+    tempFileBase = '.pdf-grep.' + str(os.getpid())
+    tempDirs = ['/dev/shm', '/tmp', '/var/tmp', ]
+    for tempDir in tempDirs:
+        if not os.path.isdir(tempDir): continue
+        tempFile = os.path.join(tempDir, tempFileBase)
+        resultFile = openFile4Write(tempFile)
+        if resultFile: return resultFile, tempFile
+    errorExit("Couldn't create temporary file.")
+
+
+def storeResult():
+    resultFile, tempFile = prepareOutput()
+    writeResults(resultFile)
     resultFile.close()
     return tempFile
 
@@ -240,15 +320,23 @@ def processResult(result):
 def showOutput(tempFile):
     if IC_GREP: icLess = '-I'
     else: icLess = ''
-    os.system("less " + icLess + '-p "' + PATTERN + '|^\*\*\* Total hits: [0-9]+.*$" ' + tempFile)
+    # do not open directly, go for pipe to facilitate 'Save to file' functionality of the less viewer
+    os.system("cat " + tempFile + ' | less ' + icLess + '-p "' + PATTERN + '|^\*\*\* Total hits:" ')
     os.remove(tempFile)
 
 
+def processResult():
+    if FILE_TO_SAVE: saveResult()
+    else: showOutput(storeResult())
+
+
 if __name__ == "__main__":
+    startTime = time.time()
     processParams(sys.argv[1:])
     normalizeFileList()
     checkParams()
-    result = doSearch()
-    if result['total']:
-        tempFile = processResult(result)
-        showOutput(tempFile)
+    checkPrerequisites()
+    results = doSearch()
+    duration = formatDuration(time.time() - startTime)
+    if results['total']: processResult()
+    elif not QUIET: print("No hits (in %s)" % duration)
