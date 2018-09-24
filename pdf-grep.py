@@ -252,21 +252,20 @@ def formatDuration(timeDuration):
     else: return '%d ms' % (1000 * round(timeDuration, 3))
 
 
-def openFile4Write(path):
-    if os.path.isfile(path): return False
-    try: return open(path, 'w')
-    except: return False
+def word4Number(word, number, irregularPlural=None):
+    if number == 1: return word
+    elif irregularPlural: return irregularPlural
+    else: return word + 's'
 
 
-def writeHeader(resultFile, result):
+def writeHeader(resultFile):
     resultFile.write('*** Searching for pattern "%s"\n' % PATTERN)
-    if result['lines'] == 1: lineWord = 'line'
-    else: lineWord = 'lines'
-    if result['total'] == result['lines']:
-        resultFile.write("*** Total hits: %d (in %s)\n" % (result['total'], duration))
+    lineWord = word4Number('line', results['lines'])
+    if results['total'] == results['lines']:
+        resultFile.write("*** Total hits: %d (in %s)\n" % (results['total'], duration))
     else:
         resultFile.write("*** Total hits: %d in %d %s (in %s)\n" %
-                         (result['total'], result['lines'], lineWord, duration))
+                         (results['total'], results['lines'], lineWord, duration))
 
 
 DELIMITER = "\n*********************************************************************************************\n"
@@ -274,10 +273,8 @@ DELIMITER = "\n*****************************************************************
 
 def writeFileHeader(resultFile, found):
     resultFile.write(DELIMITER)
-    if found['hits'] == 1: hitWord = 'hit'
-    else: hitWord = 'hits'
-    if len(found['lines']) == 1: lineWord = 'line'
-    else: lineWord = 'lines'
+    hitWord = word4Number('hit', found['hits'])
+    lineWord = word4Number('line', len(found['lines']))
     if found['dir']: dirLbl = ' [%s/]' % found['dir']
     else: dirLbl = ''
     if found['hits'] == len(found['lines']):
@@ -288,10 +285,16 @@ def writeFileHeader(resultFile, found):
 
 
 def writeResults(resultFile):
-    writeHeader(resultFile, results)
+    writeHeader(resultFile)
     for found in results['found']:
         writeFileHeader(resultFile, found)
         resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
+
+
+def openFile4Write(path):
+    if os.path.isfile(path): return False
+    try: return open(path, 'w')
+    except: return False
 
 
 def saveResult():
