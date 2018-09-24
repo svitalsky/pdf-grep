@@ -20,8 +20,8 @@ HELP = """
         pdf-grep [-q] [-i] [-c] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
     Options and parameters:
-        The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern' and
-        'not exclude-mask'.
+        The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern', '-s file'
+        and 'not exclude-mask'.
         -h:          print this help and exit.
         -q:          be quiet in case nothing is found ('No hits (in xx ms)' is reported by default)
         -i:          make the search case insensitive; it is case sensitive by default.
