@@ -17,7 +17,7 @@ HELP = """
 
     Usage:
         pdf-grep -h
-        pdf-grep [-q] [-i] [-c] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
+        pdf-grep [-q] [-i] [-c] [-r] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
     Options and parameters:
         The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern', '-s file'
@@ -28,6 +28,7 @@ HELP = """
         -c:          show clean lines, i.e. do not prepend lines with their respective approximate
                      position in a file; by default each line with a hit is included in results prepended
                      with approximate position, e.g. "(23%) the actual text of the line"
+        -r:          search any given directory for PDFs recursively
         -p:          optionally specify explicitly that the next argument is a search pattern,
                      e.g. when you need to search for the reserved word 'not' (see bellow).
         -s {file|-}: don't open the results in 'less', rather save them to the file; fails if the file
@@ -35,7 +36,7 @@ HELP = """
                      the standard output
 
         fileN.pdf:   file to be searched in, may be repeated.
-        dirN:        directory to be searched in (NOT recursively!), may be repeated; in each
+        dirN:        directory to be searched in (not recursively by default), may be repeated; in each
                      directory all the PDF files (i.e. having the .pdf suffix — suffix is case
                      insensitive, so the file 'dir/file.PDF' is counted in as well) are included.
         
@@ -96,6 +97,7 @@ IC_GREP = ""
 FILE_TO_SAVE = None
 QUIET = False
 CLEAN_LINES = False
+RECURSIVE = False
 expectNot = False
 expectPat = False
 expectFile = False
@@ -128,15 +130,18 @@ def setFile(par):
 def dirPDFs(directory):
     result = []
     for f in os.listdir(directory):
-        if os.path.isfile(os.path.join(directory, f)) \
+        fPath = os.path.join(directory, f)
+        if os.path.isfile(fPath) \
                 and len(f) > 3 \
                 and f[-4:].lower() == '.pdf':
-            result.append(os.path.join(directory, f))
+            result.append(fPath)
+        elif RECURSIVE and os.path.isdir(fPath):
+            result.extend(dirPDFs(fPath))
     return result
 
 
 def processParams(params):
-    global IC_GREP, QUIET, CLEAN_LINES, expectNot, expectPat, expectFile
+    global IC_GREP, QUIET, CLEAN_LINES, RECURSIVE, expectNot, expectPat, expectFile
     for par in params:
         if expectPat: setSearchPattern(par)
         elif expectNot: setNotMask(par)
@@ -147,6 +152,7 @@ def processParams(params):
         elif par == '-i': IC_GREP = '-i'
         elif par == '-q': QUIET = True
         elif par == '-c': CLEAN_LINES = True
+        elif par == '-r': RECURSIVE = True
         elif par == 'not' and not NOT_IN: expectNot = True
         elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
         elif os.path.isdir(par): FILES_TO_SEARCH.extend(dirPDFs(par))
