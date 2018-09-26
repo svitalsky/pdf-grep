@@ -94,6 +94,7 @@ def printHelp():
 
 
 FILES_TO_SEARCH = []
+DIRS_TO_SEARCH = []
 PATTERN = ""
 RE_PATTERN = None
 NOT_IN = None
@@ -131,6 +132,26 @@ def setFile(par):
         errorExit("File name cannot be empty.")
 
 
+def processParams(params):
+    global IC_GREP, QUIET, CLEAN_LINES, RECURSIVE, expectNot, expectPat, expectFile
+    for par in params:
+        if expectPat: setSearchPattern(par)
+        elif expectNot: setNotMask(par)
+        elif expectFile: setFile(par)
+        elif par == '-h': printHelp()
+        elif par == '-p': expectPat = True
+        elif par == '-s': expectFile = True
+        elif par == '-i': IC_GREP = '-i'
+        elif par == '-q': QUIET = True
+        elif par == '-c': CLEAN_LINES = True
+        elif par == '-r': RECURSIVE = True
+        elif par == 'not' and not NOT_IN: expectNot = True
+        elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
+        elif os.path.isdir(par): DIRS_TO_SEARCH.append(par)
+        elif not PATTERN: setSearchPattern(par)
+        else: errorExit("Unrecognized parameter '" + par + "'.")
+
+
 def listDirectory(directory):
     try:
         return os.listdir(directory)
@@ -152,26 +173,6 @@ def dirPDFs(directory):
     return result
 
 
-def processParams(params):
-    global IC_GREP, QUIET, CLEAN_LINES, RECURSIVE, expectNot, expectPat, expectFile
-    for par in params:
-        if expectPat: setSearchPattern(par)
-        elif expectNot: setNotMask(par)
-        elif expectFile: setFile(par)
-        elif par == '-h': printHelp()
-        elif par == '-p': expectPat = True
-        elif par == '-s': expectFile = True
-        elif par == '-i': IC_GREP = '-i'
-        elif par == '-q': QUIET = True
-        elif par == '-c': CLEAN_LINES = True
-        elif par == '-r': RECURSIVE = True
-        elif par == 'not' and not NOT_IN: expectNot = True
-        elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
-        elif os.path.isdir(par): FILES_TO_SEARCH.extend(dirPDFs(par))
-        elif not PATTERN: setSearchPattern(par)
-        else: errorExit("Unrecognized parameter '" + par + "'.")
-
-
 def filterList(fileList):
     chklen = len(str(NOT_IN))
     temp = []
@@ -189,8 +190,10 @@ def sortList(data):
     return data
 
 
-def normalizeFileList():
+def prepareFileList():
     global FILES_TO_SEARCH
+    for directory in DIRS_TO_SEARCH:
+        FILES_TO_SEARCH.extend(dirPDFs(directory))
     FILES_TO_SEARCH = list(set(FILES_TO_SEARCH))
     if NOT_IN: FILES_TO_SEARCH = sortList(filterList(FILES_TO_SEARCH))
     else: FILES_TO_SEARCH = sortList(FILES_TO_SEARCH)
@@ -360,7 +363,7 @@ def processResult():
 if __name__ == "__main__":
     startTime = time.time()
     processParams(sys.argv[1:])
-    normalizeFileList()
+    prepareFileList()
     checkParams()
     checkPrerequisites()
     results = doSearch()
