@@ -79,8 +79,12 @@ HELP = """
 """
 
 
+def printError(error):
+    print(error, file=sys.stderr)
+
+
 def errorExit(cause):
-    print(cause + " Exiting now!", file=sys.stderr)
+    printError(cause + " Exiting now!")
     sys.exit(1)
 
 
@@ -127,16 +131,24 @@ def setFile(par):
         errorExit("File name cannot be empty.")
 
 
+def listDirectory(directory):
+    try:
+        return os.listdir(directory)
+    except (OSError, IOError):
+        printError("Failed to open the '%s' directory!" % directory)
+        return None
+
+
 def dirPDFs(directory):
     result = []
-    for f in os.listdir(directory):
-        fPath = os.path.join(directory, f)
-        if os.path.isfile(fPath) \
-                and len(f) > 3 \
-                and f[-4:].lower() == '.pdf':
-            result.append(fPath)
-        elif RECURSIVE and os.path.isdir(fPath):
-            result.extend(dirPDFs(fPath))
+    listdir = listDirectory(directory)
+    if listdir:
+        for fName in listdir:
+            fPath = os.path.join(directory, fName)
+            if os.path.isfile(fPath) and len(fName) > 3 and fName[-4:].lower() == '.pdf':
+                result.append(fPath)
+            elif RECURSIVE and os.path.isdir(fPath):
+                result.extend(dirPDFs(fPath))
     return result
 
 
