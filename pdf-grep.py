@@ -146,7 +146,8 @@ def processParams(params):
         elif par == '-c': CLEAN_LINES = True
         elif par == '-r': RECURSIVE = True
         elif par == 'not' and not NOT_IN: expectNot = True
-        elif os.path.isfile(par): FILES_TO_SEARCH.append(par)
+        elif os.path.isfile(par):
+            if len(par) > 3 and par[-4:].lower() == '.pdf': FILES_TO_SEARCH.append(par)
         elif os.path.isdir(par): DIRS_TO_SEARCH.append(par)
         elif not PATTERN: setSearchPattern(par)
         else: errorExit("Unrecognized parameter '" + par + "'.")
