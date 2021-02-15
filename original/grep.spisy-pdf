@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# by MH!
+
 PDFS_path=working.2017-12-09/2in1/parts
 
 total=0
@@ -6,7 +10,7 @@ for x in $PDFS_path/*.pdf; do
     total=$(($total + $hits))
 done
 
-{ 
+{
 echo "*** Total hits: $total"
 echo
 for x in $PDFS_path/*.pdf; do
@@ -22,7 +26,7 @@ for x in $PDFS_path/*.pdf; do
         echo "*** $pdf_name: $hits $hit_word"
         pdftotext $x - | grep "$1" | sed 's/^/\n/'
         echo
-    fi 
+    fi
 done } | less -p"$1|^\*\*\* Total hits:"
 
 
