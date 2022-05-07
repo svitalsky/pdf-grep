@@ -1,0 +1,3 @@
+TODOs
+ - ›not‹ more than once
+ - ›not‹ should exclude any file the name or relative path of which contain ›exclude-mask‹ anywhere in them
