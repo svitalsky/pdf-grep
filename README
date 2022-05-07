@@ -5,7 +5,7 @@ open the results in the 'less' text viewer or save them to a file. Expects 'pdft
 ```
 Usage:
     pdf-grep -h
-    pdf-grep [-q] [-i] [-c] [-r] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
+    pdf-grep [-q] [-i] [-c|-o] [-r] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
 Options and parameters:
     The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern', '-s file'
@@ -16,6 +16,7 @@ Options and parameters:
     -c:          show clean lines, i.e. do not prepend lines with their respective approximate
                  position in a file; by default each line with a hit is included in results prepended
                  with approximate position, e.g. "(23%) the actual text of the line"
+    -t:          only print the looked for terms, stripping the rest of the mathing line (implies -c)
     -r:          search any given directory for PDFs recursively
     -p:          optionally specify explicitly that the next argument is a search pattern,
                  e.g. when you need to search for the reserved word 'not' (see bellow).
