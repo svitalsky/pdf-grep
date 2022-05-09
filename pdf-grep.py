@@ -98,11 +98,13 @@ FILES_TO_SEARCH = []
 DIRS_TO_SEARCH = []
 PATTERN = ""
 RE_PATTERN = None
+RE_CHARS = re.compile(u'\w|[áéěíóúůýčďňřšťžÁÉĚÍÓÚŮÝČĎŇŘŠŤŽ]')
 NOT_IN = None
 IC_GREP = ""
 FILE_TO_SAVE = None
 QUIET = False
 CLEAN_LINES = False
+TERM_ONLY = False
 RECURSIVE = False
 expectNot = False
 expectPat = False
@@ -134,7 +136,7 @@ def setFile(par):
 
 
 def processParams(params):
-    global IC_GREP, QUIET, CLEAN_LINES, RECURSIVE, expectNot, expectPat, expectFile
+    global IC_GREP, QUIET, CLEAN_LINES, TERM_ONLY, RECURSIVE, expectNot, expectPat, expectFile
     for par in params:
         if expectPat: setSearchPattern(par)
         elif expectNot: setNotMask(par)
@@ -145,6 +147,7 @@ def processParams(params):
         elif par == '-i': IC_GREP = '-i'
         elif par == '-q': QUIET = True
         elif par == '-c': CLEAN_LINES = True
+        elif par == '-t': TERM_ONLY = True
         elif par == '-r': RECURSIVE = True
         elif par == 'not' and not NOT_IN: expectNot = True
         elif os.path.isfile(par):
@@ -152,6 +155,7 @@ def processParams(params):
         elif os.path.isdir(par): DIRS_TO_SEARCH.append(par)
         elif not PATTERN: setSearchPattern(par)
         else: errorExit("Unrecognized parameter '" + par + "'.")
+    if TERM_ONLY and FILE_TO_SAVE is None: setFile('-')
 
 
 def listDirectory(directory):
@@ -238,6 +242,34 @@ def checkPrerequisites():
             errorExit("For this script to work '%s' must be installed and available." % item)
 
 
+def appendTerms(lines, line):
+    lineloc = line[:]
+    while True:
+        res = RE_PATTERN.search(lineloc)
+        if res is None: break
+        start = -1
+        resStart = res.start()
+        if resStart == 0: start = 0
+        else:
+            # slow but safe
+            for ind in range(1, resStart + 1):
+                if not RE_CHARS.match(lineloc[resStart - ind]):
+                    start = resStart - ind + 1
+                    break
+        if start == -1: start = 0
+        end = -1
+        resEnd = res.end()
+        if resEnd == len(lineloc): end = resEnd
+        else:
+            for ind in range(resEnd, len(lineloc)):
+                if not RE_CHARS.match(lineloc[ind]):
+                    end = ind
+                    break
+        if end == -1: end = len(lineloc)
+        lines.append(lineloc[start:end])
+        lineloc = lineloc[end:]
+
+
 def positionLabel(lines, index):
     pos = 100.0 * index / len(lines)
     return '(%2d%s) ' % (pos, '%')
@@ -250,7 +282,8 @@ def searchInText(lines):
         found = RE_PATTERN.findall(line)
         if found:
             result['hits'] += len(found)
-            if CLEAN_LINES: result['lines'].append(line)
+            if TERM_ONLY: appendTerms(result['lines'], line)
+            elif CLEAN_LINES: result['lines'].append(line)
             else: result['lines'].append(positionLabel(lines, index) + line)
     return result
 
@@ -314,6 +347,11 @@ def writeResults(resultFile):
         resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
 
 
+def writeResultsSimple(resultFile):
+    for found in results['found']:
+        resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
+
+
 def openFile4Write(path):
     if os.path.isfile(path): return False
     try: return open(path, 'w')
@@ -321,7 +359,9 @@ def openFile4Write(path):
 
 
 def saveResult():
-    if FILE_TO_SAVE == '-': writeResults(sys.stdout)
+    if FILE_TO_SAVE == '-':
+        if TERM_ONLY: writeResultsSimple(sys.stdout)
+        else: writeResults(sys.stdout)
     else:
         # check again here
         if os.path.exists(FILE_TO_SAVE): errorExit("Output file '%s' already exists." % FILE_TO_SAVE)
