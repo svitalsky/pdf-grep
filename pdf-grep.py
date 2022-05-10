@@ -98,7 +98,7 @@ FILES_TO_SEARCH = []
 DIRS_TO_SEARCH = []
 PATTERN = ""
 RE_PATTERN = None
-RE_CHARS = re.compile(u'\w|[áéěíóúůýčďňřšťžÁÉĚÍÓÚŮÝČĎŇŘŠŤŽ]')
+RE_CHARS = re.compile(u'\w|[àáéěíóúůýčďňřšťžÀÁÉĚÍÓÚŮÝČĎŇŘŠŤŽ]')     # todo: add more diacritic and other UTF-8 chars
 NOT_IN = None
 IC_GREP = ""
 FILE_TO_SAVE = None
@@ -242,30 +242,34 @@ def checkPrerequisites():
             errorExit("For this script to work '%s' must be installed and available." % item)
 
 
+def termStart(lineloc, res):
+    resStart = res.start()
+    if resStart == 0: return 0
+    else:
+        # slow but safe
+        for ind in range(1, resStart + 1):
+            if not RE_CHARS.match(lineloc[resStart - ind]):
+                return resStart - ind + 1
+    return 0
+
+
+def termEnd(lineloc, res):
+    resEnd = res.end()
+    if resEnd == len(lineloc): return resEnd
+    else:
+        for ind in range(resEnd, len(lineloc)):
+            if not RE_CHARS.match(lineloc[ind]):
+                return ind
+    return len(lineloc)
+
+
 def appendTerms(lines, line):
     lineloc = line[:]
     while True:
         res = RE_PATTERN.search(lineloc)
         if res is None: break
-        start = -1
-        resStart = res.start()
-        if resStart == 0: start = 0
-        else:
-            # slow but safe
-            for ind in range(1, resStart + 1):
-                if not RE_CHARS.match(lineloc[resStart - ind]):
-                    start = resStart - ind + 1
-                    break
-        if start == -1: start = 0
-        end = -1
-        resEnd = res.end()
-        if resEnd == len(lineloc): end = resEnd
-        else:
-            for ind in range(resEnd, len(lineloc)):
-                if not RE_CHARS.match(lineloc[ind]):
-                    end = ind
-                    break
-        if end == -1: end = len(lineloc)
+        start = termStart(lineloc, res)
+        end = termEnd(lineloc, res)
         lines.append(lineloc[start:end])
         lineloc = lineloc[end:]
 
