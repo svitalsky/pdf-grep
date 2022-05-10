@@ -17,7 +17,7 @@ HELP = """
 
     Usage:
         pdf-grep -h
-        pdf-grep [-q] [-i] [-c|-o] [-r] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
+        pdf-grep [-q] [-i] [-c|-t] [-r] [fileN.pdf ...] [dirN ...] [not exclude-mask] [-s {file|-}] <[-p] pattern>
 
     Options and parameters:
         The order of parameters is mostly irrelevant, apart from obvious pairs '[-p] pattern', '-s file'
