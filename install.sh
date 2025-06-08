@@ -24,7 +24,7 @@ if [ -f pdf-grep.py ] ; then
     /bin/cp -v -f pdf-grep.py "$INST_DIR/pdf-grep" && \
     chmod 755 -v "$INST_DIR/pdf-grep"
 else
-    errorExit "Cannot find the script 'pdf=grep.py' to install it. Please check or update your repository"
+    errorExit "Cannot find the script 'pdf-grep.py' to install it. Please check or update your repository"
 fi
 
 exit 0
