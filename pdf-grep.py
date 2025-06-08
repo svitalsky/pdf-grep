@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # coding=utf-8
 
 from __future__ import print_function
@@ -248,8 +248,7 @@ def termStart(lineloc, res):
     else:
         # slow but safe
         for ind in range(1, resStart + 1):
-            if not RE_CHARS.match(lineloc[resStart - ind]):
-                return resStart - ind + 1
+            if not RE_CHARS.match(lineloc[resStart - ind]): return resStart - ind + 1
     return 0
 
 
@@ -258,8 +257,7 @@ def termEnd(lineloc, res):
     if resEnd == len(lineloc): return resEnd
     else:
         for ind in range(resEnd, len(lineloc)):
-            if not RE_CHARS.match(lineloc[ind]):
-                return ind
+            if not RE_CHARS.match(lineloc[ind]): return ind
     return len(lineloc)
 
 
