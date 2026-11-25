@@ -1,7 +1,5 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 # coding=utf-8
-
-from __future__ import print_function
 
 import os
 import re
@@ -40,7 +38,7 @@ HELP = """
         dirN:        directory to be searched in (not recursively by default), may be repeated; in each
                      directory all the PDF files (i.e. having the .pdf suffix — suffix is case
                      insensitive, so the file 'dir/file.PDF' is counted in as well) are included.
-        
+
         At least one PDF file or a directory containing one must be given!
 
         not exclude-mask:
@@ -98,7 +96,7 @@ FILES_TO_SEARCH = []
 DIRS_TO_SEARCH = []
 PATTERN = ""
 RE_PATTERN = None
-RE_CHARS = re.compile(u'\w|[æàąáāåạäâȧãăéěēęëèêėẽíīïîìĩóòōôöȯõøœúůūŭüûùũýÿỳỹćčçĉďĝǧĥĵľłńňñņṅřṙŗṡśšŝşťţṫźžżÆÀĄÁĀÅẠÄÂȦÃĂÉĚĒĘËÈÊĖẼÍĪÏÎÌĨÓÒŌÔÖȮÕØŒÚŮŪŬÜÛÙŨÝŸỲỸĆČÇĈĎĜǦĤĴĽŁŃŇÑŅṄŘṘŖṠŚŠŜŞŤŢṪŹŽŻß]')     # todo: add more diacritic and other UTF-8 chars
+RE_CHARS = re.compile(r'\w|[æàąáāåạäâȧãăéěēęëèêėẽíīïîìĩóòōôöȯõøœúůūŭüûùũýÿỳỹćčçĉďĝǧĥĵľłńňñņṅřṙŗṡśšŝşťţṫźžżÆÀĄÁĀÅẠÄÂȦÃĂÉĚĒĘËÈÊĖẼÍĪÏÎÌĨÓÒŌÔÖȮÕØŒÚŮŪŬÜÛÙŨÝŸỲỸĆČÇĈĎĜǦĤĴĽŁŃŇÑŅṄŘṘŖṠŚŠŜŞŤŢṪŹŽŻß]')     # todo: add more diacritic and other UTF-8 chars
 NOT_IN = None
 IC_GREP = ""
 FILE_TO_SAVE = None
@@ -189,11 +187,15 @@ def filterList(fileList):
 
 
 def sortList(data):
-    localeBefore = locale.getlocale(locale.LC_ALL)
-    locale.setlocale(locale.LC_ALL, 'cs_CZ.UTF-8')
-    data = sorted(data, key=locale.strxfrm)
-    locale.setlocale(locale.LC_ALL, localeBefore)
-    return data
+    localeBefore = locale.setlocale(locale.LC_COLLATE)
+    try:
+        locale.setlocale(locale.LC_COLLATE, 'cs_CZ.UTF-8')
+    except locale.Error:
+        return sorted(data, key=locale.strxfrm)
+    try:
+        return sorted(data, key=locale.strxfrm)
+    finally:
+        locale.setlocale(locale.LC_COLLATE, localeBefore)
 
 
 def prepareFileList():
@@ -212,9 +214,9 @@ def utf(asciiStr):
 def checkParams():
     global RE_PATTERN
     if not PATTERN: errorExit("Search for what?")
-    elif str(PATTERN).find("\n") != -1: errorExit("Multiline search patterns are not supported.")
-    elif IC_GREP: RE_PATTERN = re.compile(utf(PATTERN), re.UNICODE | re.IGNORECASE)
-    else: RE_PATTERN = re.compile(utf(PATTERN), re.UNICODE)
+    elif PATTERN.find("\n") != -1: errorExit("Multiline search patterns are not supported.")
+    elif IC_GREP: RE_PATTERN = re.compile(PATTERN, re.IGNORECASE)
+    else: RE_PATTERN = re.compile(PATTERN)
     if not FILES_TO_SEARCH: errorExit("Search where?")
     if FILE_TO_SAVE and FILE_TO_SAVE != '-':
         if os.path.exists(FILE_TO_SAVE): errorExit("Output file '%s' already exists." % FILE_TO_SAVE)
@@ -293,7 +295,7 @@ def searchInText(lines):
 def doSearch():
     total, lines, found = (0, 0, [])
     for f in FILES_TO_SEARCH:
-        result = searchInText(subprocess.check_output(['pdftotext', f, '-']).splitlines())
+        result = searchInText(subprocess.check_output(['pdftotext', '-enc', 'UTF-8', f, '-']).splitlines())
         total += result['hits']
         if result['hits']:
             lines += len(result['lines'])
@@ -346,18 +348,17 @@ def writeResults(resultFile):
     writeHeader(resultFile)
     for found in results['found']:
         writeFileHeader(resultFile, found)
-        resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
+        resultFile.writelines(map(lambda line: line + '\n', found['lines']))
 
 
 def writeResultsSimple(resultFile):
     for found in results['found']:
-        resultFile.writelines(map(lambda line: line.encode('utf-8') + '\n', found['lines']))
+        resultFile.writelines(map(lambda line: line + '\n', found['lines']))
 
 
 def openFile4Write(path):
-    if os.path.isfile(path): return False
-    try: return open(path, 'w')
-    except: return False
+    try: return open(path, 'x', encoding='utf-8')
+    except OSError: return False
 
 
 def saveResult():
@@ -392,11 +393,16 @@ def storeResult():
 
 
 def showOutput(tempFile):
-    if IC_GREP: icLess = '-I'
-    else: icLess = ''
+    lessCommand = ['less']
+    if IC_GREP: lessCommand.append('-I')
+    lessCommand.extend(['-p', PATTERN + r'|^\*\*\* Total hits:'])
     # do not open directly, go for pipe to facilitate 'Save to file' functionality of the less viewer
-    os.system("cat " + tempFile + ' | less ' + icLess + '-p "' + PATTERN + '|^\*\*\* Total hits:" ')
-    os.remove(tempFile)
+    try:
+        with subprocess.Popen(['cat', tempFile], stdout=subprocess.PIPE) as cat:
+            with cat.stdout:
+                subprocess.run(lessCommand, stdin=cat.stdout)
+    finally:
+        os.remove(tempFile)
 
 
 def processResult():
